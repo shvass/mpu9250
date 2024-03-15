@@ -20,8 +20,11 @@
 #define MPU_HPP
 
 #include <driver/gpio.h>
-// #include <driver/i2c_master.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include <driver/i2c.h>
+#include <deque>
+
 
 #include "registerMap.hpp"
 
@@ -39,6 +42,49 @@ class mpu {
 
 public:
 
+    /**
+     * @brief raw sensor readings from the imu
+     */
+    struct rawSensor
+    {
+        // accelerometer readings
+        int16_t aX, aY, aZ;
+        // temperature
+        int16_t temp;
+        // gyroscopic readings
+        int16_t gX, gY, gZ;
+    } rawData, filteredRaw;
+
+
+    struct imuData
+    {
+        float aX, aY, aZ;
+        float temp;
+        float gX, gY, gZ;
+
+        // float vX, vY, vZ;
+        // float X, Y, Z;
+
+        // imuData(rawData& raw);
+    } data;
+
+    
+    class filter{
+        public:
+        std::deque<rawSensor> buffer;
+
+        rawSensor& source = rawData;
+        imuData& dest = data;
+
+        filter(mpu& parent) : source(parent.rawData), dest(parent.data) {};
+        
+        void update();
+
+        uint8_t filterSize = 50;
+    };
+
+
+    
     /**
      * @brief Construct a new mpu object
      * 
@@ -70,11 +116,20 @@ public:
 
 
 
+    void setSyncFreq(unsigned int freq = 100);
 
+    void beginSyncTask(unsigned int freq = 100);
+    void endSyncTask();
 
 private:
 
     uint8_t address = MPU9250_ADDRESS;
+
+    float syncPeriod = 0.0f;
+
+    TaskHandle_t syncTaskHandle = 0;
+    void syncTask();
+    static void s_syncTask(void* imu);
 
 };  
 #endif //  MPU_HPP
